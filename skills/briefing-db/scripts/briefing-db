@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+"""
+Briefing Database CLI
+Store and retrieve news briefing data in SQLite.
+"""
+
+import argparse
+import json
+import os
+import sqlite3
+import sys
+from datetime import datetime
+from pathlib import Path
+
+# Default paths - customize for your setup
+DEFAULT_DB_PATH = os.environ.get(
+    "BRIEFING_DB_PATH",
+    os.path.expanduser("~/.openclaw/workspace/briefings/briefings.db")
+)
+SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "references", "schema.sql")
+
+
+def get_db(db_path=None):
+    """Get database connection."""
+    path = db_path or DEFAULT_DB_PATH
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db(db_path=None):
+    """Initialize database tables."""
+    conn = get_db(db_path)
+    with open(SCHEMA_PATH, 'r') as f:
+        schema = f.read()
+    conn.executescript(schema)
+    conn.commit()
+    conn.close()
+    print(f"✅ Database initialized: {db_path or DEFAULT_DB_PATH}")
+
+
+def save_briefing(data, db_path=None):
+    """Save a briefing to the database."""
+    conn = get_db(db_path)
+    cur = conn.cursor()
+    
+    meta = data.get('meta', {})
+    summary = data.get('summary', {})
+    items = data.get('items', [])
+    
+    cur.execute('''
+        INSERT OR REPLACE INTO briefings 
+        (job_name, date, analysis_type, headline, sentiment, urgency, key_points, source_count, item_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        meta.get('job', ''),
+        meta.get('date', datetime.now().strftime('%Y-%m-%d')),
+        meta.get('analysisType', 'general'),
+        summary.get('headline', meta.get('headline', '')),
+        summary.get('sentiment', ''),
+        summary.get('urgency', ''),
+        json.dumps(summary.get('keyPoints', []), ensure_ascii=False),
+        meta.get('sourceCount', len(items)),
+        len(items)
+    ))
+    
+    briefing_id = cur.lastrowid
+    
+    # Clear existing items (for REPLACE)
+    cur.execute('DELETE FROM briefing_items WHERE briefing_id = ?', (briefing_id,))
+    
+    for idx, item in enumerate(items):
+        source = item.get('source', {})
+        analysis = item.get('analysis', {})
+        background = analysis.get('background', {})
+        impact = analysis.get('impact', {})
+        
+        cur.execute('''
+            INSERT INTO briefing_items 
+            (briefing_id, item_order, headline, source_type, source_name, source_url, source_timestamp,
+             what_happened, background_historical, background_cultural, background_causation, timeline,
+             positions, outlook, impact_direct, impact_indirect, impact_watch_points,
+             references_json, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            briefing_id,
+            idx + 1,
+            item.get('headline', ''),
+            source.get('type', ''),
+            source.get('name', ''),
+            source.get('url', ''),
+            source.get('timestamp', ''),
+            analysis.get('whatHappened', ''),
+            background.get('historical', ''),
+            background.get('culturalReligious', ''),
+            background.get('causation', ''),
+            json.dumps(background.get('timeline', []), ensure_ascii=False),
+            json.dumps(analysis.get('positions', []), ensure_ascii=False),
+            json.dumps(analysis.get('outlook', {}), ensure_ascii=False),
+            impact.get('direct', ''),
+            impact.get('indirect', ''),
+            json.dumps(impact.get('watchPoints', []), ensure_ascii=False),
+            json.dumps(item.get('references', []), ensure_ascii=False),
+            json.dumps(item.get('tags', []), ensure_ascii=False)
+        ))
+    
+    conn.commit()
+    conn.close()
+    
+    print(f"✅ Saved briefing: {meta.get('date')} / {meta.get('analysisType')} ({len(items)} items)")
+    print(f"   ID: {briefing_id}")
+    return briefing_id
+
+
+def get_briefing(date=None, analysis_type=None, briefing_id=None, db_path=None):
+    """Retrieve a briefing."""
+    conn = get_db(db_path)
+    cur = conn.cursor()
+    
+    if briefing_id:
+        cur.execute('SELECT * FROM briefings WHERE id = ?', (briefing_id,))
+    elif date and analysis_type:
+        cur.execute('SELECT * FROM briefings WHERE date = ? AND analysis_type = ?', (date, analysis_type))
+    elif date:
+        cur.execute('SELECT * FROM briefings WHERE date = ?', (date,))
+    else:
+        print("❌ --date or --id required")
+        return None
+    
+    briefing = cur.fetchone()
+    if not briefing:
+        print("❌ Briefing not found")
+        return None
+    
+    cur.execute('SELECT * FROM briefing_items WHERE briefing_id = ? ORDER BY item_order', (briefing['id'],))
+    items = cur.fetchall()
+    conn.close()
+    
+    result = {
+        'meta': {
+            'id': briefing['id'],
+            'job': briefing['job_name'],
+            'date': briefing['date'],
+            'analysisType': briefing['analysis_type'],
+            'sourceCount': briefing['source_count'],
+            'itemCount': briefing['item_count'],
+            'createdAt': briefing['created_at']
+        },
+        'summary': {
+            'headline': briefing['headline'],
+            'keyPoints': json.loads(briefing['key_points'] or '[]'),
+            'sentiment': briefing['sentiment'],
+            'urgency': briefing['urgency']
+        },
+        'items': []
+    }
+    
+    for item in items:
+        result['items'].append({
+            'id': item['id'],
+            'headline': item['headline'],
+            'source': {
+                'type': item['source_type'],
+                'name': item['source_name'],
+                'url': item['source_url'],
+                'timestamp': item['source_timestamp']
+            },
+            'analysis': {
+                'whatHappened': item['what_happened'],
+                'background': {
+                    'historical': item['background_historical'],
+                    'culturalReligious': item['background_cultural'],
+                    'causation': item['background_causation'],
+                    'timeline': json.loads(item['timeline'] or '[]')
+                },
+                'positions': json.loads(item['positions'] or '[]'),
+                'outlook': json.loads(item['outlook'] or '{}'),
+                'impact': {
+                    'direct': item['impact_direct'],
+                    'indirect': item['impact_indirect'],
+                    'watchPoints': json.loads(item['impact_watch_points'] or '[]')
+                }
+            },
+            'references': json.loads(item['references_json'] or '[]'),
+            'tags': json.loads(item['tags'] or '[]')
+        })
+    
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return result
+
+
+def list_briefings(limit=10, analysis_type=None, db_path=None):
+    """List recent briefings."""
+    conn = get_db(db_path)
+    cur = conn.cursor()
+    
+    if analysis_type:
+        cur.execute('''
+            SELECT id, date, analysis_type, headline, item_count, created_at 
+            FROM briefings WHERE analysis_type = ?
+            ORDER BY date DESC, created_at DESC LIMIT ?
+        ''', (analysis_type, limit))
+    else:
+        cur.execute('''
+            SELECT id, date, analysis_type, headline, item_count, created_at 
+            FROM briefings ORDER BY date DESC, created_at DESC LIMIT ?
+        ''', (limit,))
+    
+    rows = cur.fetchall()
+    conn.close()
+    
+    result = [{'id': r['id'], 'date': r['date'], 'type': r['analysis_type'],
+               'headline': r['headline'], 'items': r['item_count'], 'createdAt': r['created_at']}
+              for r in rows]
+    
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Briefing Database CLI')
+    parser.add_argument('--db', help='Database path')
+    
+    subparsers = parser.add_subparsers(dest='command', help='Commands')
+    
+    subparsers.add_parser('init', help='Initialize database')
+    
+    save_parser = subparsers.add_parser('save', help='Save briefing')
+    save_parser.add_argument('--input', '-i', help='Input JSON file')
+    save_parser.add_argument('--stdin', action='store_true', help='Read from stdin')
+    
+    get_parser = subparsers.add_parser('get', help='Get briefing')
+    get_parser.add_argument('--date', '-d', help='Date (YYYY-MM-DD)')
+    get_parser.add_argument('--type', '-t', help='Analysis type')
+    get_parser.add_argument('--id', type=int, help='Briefing ID')
+    
+    list_parser = subparsers.add_parser('list', help='List briefings')
+    list_parser.add_argument('--limit', '-n', type=int, default=10)
+    list_parser.add_argument('--type', '-t', help='Filter by type')
+    
+    args = parser.parse_args()
+    
+    if args.command == 'init':
+        init_db(args.db)
+    elif args.command == 'save':
+        if args.stdin:
+            data = json.load(sys.stdin)
+        elif args.input:
+            with open(args.input, 'r') as f:
+                data = json.load(f)
+        else:
+            print("❌ --input or --stdin required")
+            sys.exit(1)
+        save_briefing(data, args.db)
+    elif args.command == 'get':
+        get_briefing(args.date, args.type, args.id, args.db)
+    elif args.command == 'list':
+        list_briefings(args.limit, args.type, args.db)
+    else:
+        parser.print_help()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,74 @@
+# Example Briefing Job Configuration
+# This file documents how to set up an OpenClaw cron job for automated briefing collection.
+# Use this as a reference when creating cron jobs via OpenClaw's cron API.
+
+name: Morning Briefing
+description: Collect and analyze news for a specific topic
+
+# Schedule (OpenClaw cron format)
+schedule:
+  cron: "30 7 * * *"           # 7:30 AM daily
+  timezone: America/New_York    # Your timezone
+
+# Data sources
+sources:
+  twitter:
+    from: sources/x-accounts.yaml
+    filter_tags: [politics, policy]    # Only accounts with these tags
+    lookback_hours: 24
+    max_items: 20
+    
+  rss:
+    from: sources/rss-feeds.yaml
+    filter_tags: [politics, world]
+    lookback_hours: 24
+    max_items: 15
+
+# Analysis configuration
+analysis:
+  prompt_file: analyses/example.md     # Which analysis prompt to use
+  search_enabled: true                 # Enable web search for background research
+  search_depth: deep                   # light | medium | deep
+
+# Output
+output:
+  summary:
+    max_items: 5                       # Number of items in summary
+  detailed:
+    max_items: 3                       # Number of items with full analysis
+
+# Delivery
+delivery:
+  notification:
+    channel: telegram                  # telegram | discord | slack
+    content: summary                   # summary | full
+    include_link: true                 # Link to web dashboard
+    
+  database:
+    enabled: true
+    include_detailed: true
+
+# ─────────────────────────────────────────────────
+# OpenClaw Cron Job Registration
+# ─────────────────────────────────────────────────
+# Register this job using OpenClaw's cron system.
+# 
+# Example cron job payload (agentTurn):
+#
+# {
+#   "name": "daily-briefing",
+#   "schedule": { "kind": "cron", "expr": "30 7 * * *", "tz": "America/New_York" },
+#   "sessionTarget": "isolated",
+#   "payload": {
+#     "kind": "agentTurn",
+#     "message": "Collect and analyze news briefing. [Your detailed instructions here]"
+#   },
+#   "delivery": { "mode": "announce", "channel": "telegram", "to": "YOUR_CHAT_ID" }
+# }
+#
+# The agent message should include:
+# 1. Which sources to collect from (X accounts + RSS feeds)
+# 2. How to collect (bird CLI for X, web_fetch for RSS)
+# 3. Which analysis prompt to follow
+# 4. Where to save (briefing-db CLI)
+# 5. How to notify (message tool)

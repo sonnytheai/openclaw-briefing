@@ -1,0 +1,48 @@
+# RSS Feed Sources
+# Customize this list for your interests.
+#
+# Fields:
+#   name: Display name
+#   url: RSS/Atom feed URL
+#   tags: Used to filter feeds for specific briefing topics
+#   priority: critical > high > medium
+#   verified: Whether the feed URL has been tested
+
+feeds:
+  # ═══════════════════════════════════════════════
+  # Example: General News
+  # ═══════════════════════════════════════════════
+  # - name: BBC World
+  #   url: https://feeds.bbci.co.uk/news/world/rss.xml
+  #   tags: [world, politics, general]
+  #   priority: critical
+  #   verified: true
+
+  # ═══════════════════════════════════════════════
+  # Example: Technology
+  # ═══════════════════════════════════════════════
+  # - name: TechCrunch
+  #   url: https://techcrunch.com/feed/
+  #   tags: [technology, startups, ai]
+  #   priority: high
+  #   verified: true
+
+  # - name: Ars Technica
+  #   url: https://feeds.arstechnica.com/arstechnica/index
+  #   tags: [technology, science]
+  #   priority: medium
+  #   verified: true
+
+  # ═══════════════════════════════════════════════
+  # Example: Economy
+  # ═══════════════════════════════════════════════
+  # - name: Financial Times
+  #   url: https://www.ft.com/rss/home
+  #   tags: [economy, markets, business]
+  #   priority: critical
+  #   verified: true
+
+  # ═══════════════════════════════════════════════
+  # Add your feeds below
+  # ═══════════════════════════════════════════════
+  []

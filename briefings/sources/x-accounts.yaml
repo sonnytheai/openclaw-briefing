@@ -1,0 +1,42 @@
+# X/Twitter Accounts to Monitor
+# Customize this list for your interests.
+#
+# Fields:
+#   handle: Twitter/X handle (without @)
+#   name: Display name
+#   description: What they post about
+#   tags: Used to filter accounts for specific briefing topics
+#   priority: critical > high > medium (affects selection order)
+
+accounts:
+  # ═══════════════════════════════════════════════
+  # Example: Politics & Policy
+  # ═══════════════════════════════════════════════
+  # - handle: ExampleReporter
+  #   name: Example Reporter
+  #   description: Political correspondent
+  #   tags: [politics, policy]
+  #   priority: high
+
+  # ═══════════════════════════════════════════════
+  # Example: Technology & AI
+  # ═══════════════════════════════════════════════
+  # - handle: ExampleAIResearcher
+  #   name: AI Researcher
+  #   description: Posts about ML papers
+  #   tags: [ai, research, technology]
+  #   priority: critical
+
+  # ═══════════════════════════════════════════════
+  # Example: Economy & Markets
+  # ═══════════════════════════════════════════════
+  # - handle: ExampleEconomist
+  #   name: Market Analyst
+  #   description: Macro analysis and market data
+  #   tags: [economy, markets, finance]
+  #   priority: high
+
+  # ═══════════════════════════════════════════════
+  # Add your accounts below
+  # ═══════════════════════════════════════════════
+  []
