@@ -5,65 +5,60 @@ Replace placeholders (in `{BRACKETS}`) with your values.
 
 ---
 
+## Agent Prompt
+
 ```
 Collect and analyze {TOPIC} news briefing.
 
-## 0. Time Window
-**Only use content published within the last 24 hours.** Ignore older content.
+## Time Window
+**Only use content published within the last 24 hours.**
 
-## 1. Sources
-Read `{WORKSPACE}/briefings/sources/x-accounts.yaml` and `rss-feeds.yaml`.
+## Sources
+Read `~/.openclaw/workspace/briefings/sources/x-accounts.yaml` and `rss-feeds.yaml`.
 Use accounts/feeds tagged with: {TAG1}, {TAG2}, {TAG3}
 
-## 2. Data Collection
+## Data Collection
 
 ### Step 1: X/Twitter (Priority)
 Collect recent tweets using `bird` CLI:
-```bash
-bird user-tweets {HANDLE} --count 10 --plain
-```
 
-Accounts to collect:
 - bird user-tweets {HANDLE1} --count 10 --plain
 - bird user-tweets {HANDLE2} --count 10 --plain
-- ...
+- bird user-tweets {HANDLE3} --count 10 --plain
 
 ### Step 2: RSS (Supplementary)
-Use web_fetch to read RSS feeds for topics not covered by X:
-- {FEED1}
-- {FEED2}
+Use web_fetch to read RSS feeds for topics not covered by X.
 
-## 3. Filtering
-Select top 10-15 items. Prioritize X sources. Use RSS to fill gaps.
-Record source info accurately: type: "twitter", name: "@handle"
+## Filtering
+Select top 10-15 items from the last 24 hours.
+Prioritize X sources; use RSS to fill gaps.
+Include diverse perspectives.
 
-## 4. Deep Analysis
-Read `{WORKSPACE}/briefings/analyses/{ANALYSIS_FILE}.md` and follow the JSON structure.
-For each issue, use web search for background research:
-```bash
-mcporter call 'exa.web_search_exa(query: "search term", numResults: 3)'
-```
+## Analysis
+Read `~/.openclaw/workspace/briefings/analyses/{ANALYSIS_FILE}.md` and follow its JSON structure.
+For each issue, use web search for background research.
 
-## 5. Save to Database
+## Save to Database
 Write JSON to `/tmp/briefing-{TOPIC}.json`:
-```json
-{"meta": {"job": "{JOB_NAME}", "date": "YYYY-MM-DD", "analysisType": "{TOPIC}"}, "summary": {...}, "items": [...]}
-```
+
+{
+  "meta": {"job": "{JOB_NAME}", "date": "YYYY-MM-DD", "analysisType": "{TOPIC}"},
+  "summary": {"headline": "...", "keyPoints": [...], "sentiment": "...", "urgency": "..."},
+  "items": [...]
+}
 
 Save:
-```bash
-{WORKSPACE}/skills/briefing-db/scripts/briefing-db save --input /tmp/briefing-{TOPIC}.json
-```
+~/.openclaw/workspace/skills/briefing-db/scripts/briefing-db save --input /tmp/briefing-{TOPIC}.json
 
-## 6. Notification
-```
-message(action="send", channel="{CHANNEL}", target="{TARGET_ID}", message="{EMOJI} {TOPIC} Briefing - YYYY-MM-DD\n\n{headline}\n\n📖 {DASHBOARD_URL}/briefing/YYYY-MM-DD/{TOPIC}")
-```
+## Send Notification
+message(action="send", channel="{CHANNEL}", target="{TARGET}", message="{EMOJI} {TOPIC} Briefing — YYYY-MM-DD\n\n{headline}\n\nKey Points:\n• point1\n• point2\n\nUrgency: {urgency} | Sentiment: {sentiment} | {N} sources analyzed")
 ```
 
 ---
 
-## OpenClaw Cron Registration Example
+## OpenClaw Cron Registration
+
+Register via OpenClaw's cron API or ask your agent to create it:
 
 ```json
 {
@@ -76,12 +71,26 @@ message(action="send", channel="{CHANNEL}", target="{TARGET_ID}", message="{EMOJ
   "sessionTarget": "isolated",
   "payload": {
     "kind": "agentTurn",
-    "message": "... (paste the prompt above with placeholders filled) ..."
+    "message": "... (paste the agent prompt above with placeholders filled) ..."
   },
   "delivery": {
     "mode": "announce",
     "channel": "{CHANNEL}",
-    "to": "{TARGET_ID}"
+    "to": "{TARGET}"
   }
 }
 ```
+
+### Placeholders
+
+| Placeholder | Example |
+|-------------|---------|
+| `{TOPIC}` | technology, politics, economy |
+| `{TAG1}, {TAG2}` | ai, research, semiconductor |
+| `{HANDLE1}` | karpathy, OpenAI |
+| `{ANALYSIS_FILE}` | example |
+| `{JOB_NAME}` | morning-tech |
+| `{CHANNEL}` | slack, telegram, discord |
+| `{TARGET}` | #news, CHAT_ID, CHANNEL_ID |
+| `{EMOJI}` | 🤖, 🏛️, 💰 |
+| `{YOUR_TIMEZONE}` | America/New_York, Asia/Tokyo |

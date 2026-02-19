@@ -1,182 +1,164 @@
 # OpenClaw Briefing System
 
-An AI-powered news briefing pipeline built on [OpenClaw](https://github.com/openclaw/openclaw). Collects news from X/Twitter and RSS feeds, analyzes them using AI agents, stores results in SQLite, and displays them on a Next.js dashboard.
+An AI-powered news briefing pipeline for [OpenClaw](https://github.com/openclaw/openclaw).  
+Collects news from X/Twitter and RSS feeds, analyzes them with AI agents, stores in SQLite, and delivers summaries via Slack, Telegram, Discord, or any supported channel.
 
-## Architecture
+No frontend to deploy. No servers to manage. Just OpenClaw + cron.
+
+## How It Works
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   OpenClaw Agent                     │
-│                                                      │
-│  ┌──────────┐   ┌──────────┐   ┌──────────────────┐ │
-│  │  Cron     │──▶│ Collect  │──▶│  AI Analysis     │ │
-│  │  Schedule │   │ X + RSS  │   │  (Deep Research) │ │
-│  └──────────┘   └──────────┘   └────────┬─────────┘ │
-│                                          │           │
-│                              ┌───────────▼─────────┐ │
-│                              │  briefing-db CLI    │ │
-│                              │  (Save to SQLite)   │ │
-│                              └───────────┬─────────┘ │
-└──────────────────────────────────────────┼───────────┘
-                                           │
-                                   ┌───────▼───────┐
-                                   │  SQLite DB    │
-                                   │  briefings.db │
-                                   └───────┬───────┘
-                                           │
-                                   ┌───────▼───────┐
-                                   │  Next.js FE   │
-                                   │  Dashboard    │
-                                   └───────────────┘
+  Cron (scheduled)
+       │
+       ▼
+  ┌─────────────┐     ┌──────────────┐     ┌─────────────┐     ┌────────────┐
+  │ Collect data │────▶│ AI Analysis  │────▶│ Save to DB  │────▶│ Send alert │
+  │ X + RSS      │     │ Deep research│     │ (SQLite)    │     │ Slack/TG   │
+  └─────────────┘     └──────────────┘     └─────────────┘     └────────────┘
 ```
 
-## Components
-
-### 1. Briefing Skill (`skills/briefing-db/`)
-SQLite CLI for storing and querying briefing data.
-
-### 2. Source Definitions (`briefings/sources/`)
-YAML files defining which X accounts and RSS feeds to monitor, with tags for filtering.
-
-### 3. Analysis Prompts (`briefings/analyses/`)
-Markdown files with JSON schemas that guide the AI agent's analysis format.
-
-### 4. Cron Job Templates (`briefings/jobs/`)
-Example cron job configurations for OpenClaw's scheduler.
-
-### 5. Frontend (`frontend/`)
-Next.js dashboard that reads directly from the SQLite DB.
+1. **OpenClaw cron** triggers an isolated agent session on schedule
+2. **Agent collects** from X/Twitter (`bird` CLI) and RSS feeds (`web_fetch`)
+3. **Agent analyzes** each item with web search for deep background research
+4. **Agent saves** structured JSON to SQLite via `briefing-db` CLI
+5. **Agent sends** a summary to your preferred channel (Slack, Telegram, Discord, etc.)
 
 ## Quick Start
 
 ### Prerequisites
-- [OpenClaw](https://github.com/openclaw/openclaw) installed and running
-- Node.js 18+
-- Python 3.8+
-- (Optional) [bird CLI](https://github.com/openclaw/bird) for X/Twitter collection
 
-### 1. Set Up the Briefing Skill
+- [OpenClaw](https://github.com/openclaw/openclaw) installed and running
+- Python 3.8+ (for the DB CLI)
+- (Optional) [bird CLI](https://github.com/nicepkg/bird) for X/Twitter collection
+
+### 1. Install the Briefing Skill
 
 ```bash
-# Copy the skill to your OpenClaw workspace
+# Copy to your OpenClaw workspace
 cp -r skills/briefing-db ~/.openclaw/workspace/skills/
 
 # Initialize the database
+chmod +x ~/.openclaw/workspace/skills/briefing-db/scripts/briefing-db
 ~/.openclaw/workspace/skills/briefing-db/scripts/briefing-db init
 ```
 
-### 2. Configure Sources
-
-Edit the source files to match your interests:
+### 2. Configure Your Sources
 
 ```bash
-# Edit X/Twitter accounts to follow
-vim briefings/sources/x-accounts.yaml
+# Copy source configs to your workspace
+cp -r briefings/ ~/.openclaw/workspace/briefings/
+
+# Edit X/Twitter accounts
+vim ~/.openclaw/workspace/briefings/sources/x-accounts.yaml
 
 # Edit RSS feeds
-vim briefings/sources/rss-feeds.yaml
+vim ~/.openclaw/workspace/briefings/sources/rss-feeds.yaml
 ```
 
 ### 3. Customize Analysis Prompts
 
-Edit or create analysis prompts in `briefings/analyses/`. Each file defines:
-- Filtering criteria (what to include/exclude)
-- JSON output schema
-- Analysis principles
+Edit `briefings/analyses/example.md` or create new ones for your topics.  
+Each prompt defines what to filter, how to analyze, and the output JSON schema.
 
-### 4. Set Up Cron Jobs
+### 4. Register Cron Jobs
 
-Use OpenClaw's cron system to schedule collection:
+Tell your OpenClaw agent to set up a cron job. Example chat message:
 
-```bash
-# See briefings/jobs/ for example configurations
-# Register via OpenClaw's cron API or chat interface
-```
+> Set up a daily briefing cron job at 7:30 AM for technology news.  
+> Use the sources in `briefings/sources/` tagged with `technology` and `ai`.  
+> Follow the analysis prompt in `briefings/analyses/example.md`.  
+> Save results with `briefing-db save` and send a summary to Slack channel #news.
 
-### 5. Deploy the Frontend
+Or register programmatically — see `briefings/jobs/cron-prompt-template.md` for the full agent prompt template.
 
-```bash
-cd frontend
-npm install
-cp .env.example .env.local
-# Edit DATABASE_PATH in .env.local
-
-npm run dev    # Development
-npm run build  # Production build
-```
-
-### Docker Deployment
+### 5. (Optional) Seed Demo Data
 
 ```bash
-cd frontend
-docker build -t briefing-dashboard .
-docker compose up -d
+python scripts/seed-demo.py
+~/.openclaw/workspace/skills/briefing-db/scripts/briefing-db list
 ```
-
-## Customization
-
-### Adding a New Topic
-
-1. **Create an analysis prompt**: `briefings/analyses/your-topic.md`
-2. **Tag relevant sources**: Add tags in `x-accounts.yaml` and `rss-feeds.yaml`
-3. **Create a cron job**: Schedule collection in OpenClaw
-
-### Analysis Prompt Structure
-
-Each analysis prompt defines:
-- **Filtering criteria**: What news to include/exclude
-- **JSON schema**: The structure for each analyzed item
-- **Analysis principles**: Guidelines for depth, balance, data requirements
-
-See `briefings/analyses/example.md` for a complete template.
-
-### Extending the Schema
-
-The default schema includes:
-- `whatHappened`: Event summary
-- `background`: Historical context, causation, timeline
-- `positions`: Multiple stakeholder perspectives
-- `outlook`: Scenarios with probabilities
-- `impact`: Regional/personal impact analysis
-
-You can customize `skills/briefing-db/references/schema.sql` and the analysis prompts to add fields specific to your use case.
 
 ## Project Structure
 
 ```
 .
 ├── briefings/
-│   ├── analyses/          # Analysis prompt templates
-│   │   ├── example.md     # Generic template
-│   │   └── ...
-│   ├── jobs/              # Cron job configurations
-│   │   └── example-job.yaml
-│   └── sources/           # Source definitions
-│       ├── x-accounts.yaml
-│       └── rss-feeds.yaml
+│   ├── analyses/              # Analysis prompt templates
+│   │   └── example.md         # Generic deep-analysis schema
+│   ├── jobs/                  # Cron job setup guides
+│   │   ├── example-job.yaml   # Job config reference
+│   │   └── cron-prompt-template.md  # Agent prompt template
+│   └── sources/               # What to monitor
+│       ├── x-accounts.yaml    # X/Twitter accounts
+│       └── rss-feeds.yaml     # RSS feeds
 ├── skills/
-│   └── briefing-db/       # Database CLI skill
+│   └── briefing-db/           # SQLite storage skill
 │       ├── SKILL.md
-│       ├── scripts/
-│       │   └── briefing-db
-│       └── references/
-│           └── schema.sql
-├── frontend/              # Next.js dashboard
-│   ├── src/
-│   ├── package.json
-│   ├── Dockerfile
-│   └── docker-compose.yml
+│       ├── scripts/briefing-db
+│       └── references/schema.sql
+├── scripts/
+│   └── seed-demo.py           # Demo data seeder
 └── README.md
 ```
 
-## How the Pipeline Works
+## Customization
 
-1. **Cron triggers** an isolated OpenClaw agent session at scheduled times
-2. **Agent collects** data from X/Twitter (via `bird` CLI) and RSS (via `web_fetch`)
-3. **Agent analyzes** each item using web search for deep background research
-4. **Agent saves** structured JSON to SQLite via `briefing-db` CLI
-5. **Agent notifies** via configured channel (Telegram, Discord, etc.)
-6. **Frontend reads** the SQLite DB and displays the briefings
+### Adding a New Topic
+
+1. Create `briefings/analyses/your-topic.md` with filtering criteria and JSON schema
+2. Tag relevant sources in `x-accounts.yaml` / `rss-feeds.yaml`
+3. Register a new cron job with your OpenClaw agent
+
+### Notification Channels
+
+The agent uses OpenClaw's `message` tool to deliver summaries. Supported channels:
+
+- **Slack** — `message(action="send", channel="slack", target="#channel-name", message="...")`
+- **Telegram** — `message(action="send", channel="telegram", target="CHAT_ID", message="...")`
+- **Discord** — `message(action="send", channel="discord", target="CHANNEL_ID", message="...")`
+- **Signal, iMessage, WhatsApp** — Same pattern, different channel name
+
+### Analysis Schema
+
+The default analysis schema includes:
+
+| Field | Description |
+|-------|-------------|
+| `whatHappened` | Event summary (2-3 sentences) |
+| `background` | Historical context, causation chain, timeline |
+| `positions` | Multiple stakeholder perspectives |
+| `outlook` | Scenarios with probability assessments |
+| `impact` | Direct/indirect effects + watch points |
+
+Customize the schema in your analysis prompts to match your needs.
+
+### Database Queries
+
+```bash
+# List recent briefings
+briefing-db list
+
+# Get a specific briefing
+briefing-db get --date 2025-01-15 --type technology
+
+# Filter by type
+briefing-db list --type economy --limit 5
+```
+
+## Example Output (Slack/Telegram)
+
+```
+🤖 Technology Briefing — 2025-01-15
+
+Major AI Lab Announces New Foundation Model
+
+Key Points:
+• New model outperforms predecessors on key benchmarks
+• Open weights release planned for next month
+• Industry racing to match capabilities
+
+Urgency: HIGH | Sentiment: POSITIVE | 12 sources analyzed
+```
 
 ## License
 
